@@ -218,7 +218,8 @@ if __name__ == "__main__":
     cols = ['id', 'x1', 'x2', 'y1', 'y2', 'npixraw']
     grow_cols = ['npix%d' % g for g in grow_list]
     flux_cols = ['flux%d' % g for g in grow_list]
-    all_cols = cols + grow_cols + flux_cols
+    overlap_cols = ['overlap%d' % g for g in grow_list]
+    all_cols = cols + grow_cols + flux_cols + overlap_cols
     df = pandas.DataFrame(numpy.zeros((n_sources, len(all_cols))), columns=all_cols)
     idx_y, idx_x = numpy.indices(segmentation.shape)
     df.info()
@@ -257,6 +258,7 @@ if __name__ == "__main__":
         # set all pixels outside the current source to 0
         logger.debug(seg_cutout.shape)
         bad = (seg_cutout != source_id)
+        other_source = (seg_cutout != source_id) & (seg_cutout > 0)
         logger.debug(numpy.sum(bad))
         seg_cutout[bad] = 0 #seg_cutout != source_id] = 0
         dummy_after.append(pyfits.ImageHDU(data=seg_cutout.copy(),
@@ -278,12 +280,15 @@ if __name__ == "__main__":
             # get some info for the photometry masks
             mask_size = numpy.nansum(phot_mask)
 
-            phot_cols = ['npix%d' % grow_radius, 'flux%d' % grow_radius]
+            phot_cols = ['npix%d' % grow_radius, 'flux%d' % grow_radius, 'overlap%d' % grow_radius]
             for f, img in enumerate(img_data):
                 img_cutout = img[_y1:_y2, _x1:_x2]
                 flux = numpy.sum(img_cutout[phot_mask])
-                img_phot[f].loc[source_id, phot_cols] = [mask_size, flux]
 
+                # check if any of the new pixels now overlap other sources
+                overlap_pixels = numpy.sum( other_source & phot_mask )
+
+                img_phot[f].loc[source_id, phot_cols] = [mask_size, flux, overlap_pixels]
                 img_chunk = img_cutout.copy()
                 #img_chunk[~phot_mask] = numpy.NaN
                 img_chunks[f][i].append(pyfits.ImageHDU(data=img_chunk, name="PHOT_%d++%d" % (source_id, grow_radius)))
