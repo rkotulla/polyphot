@@ -28,6 +28,10 @@ if __name__ == "__main__":
                          help="segmentation filename defining regions")
     cmdline.add_argument("--grow", dest="grow_list", type=str, default="0",
                          help='list of grow steps')
+    cmdline.add_argument("--merge", dest="merge", default=False, action='store_true',
+                         help='merge all catalogs at the end')
+    cmdline.add_argument("--rename", dest="rename", default=None, type=str,
+                         help='rename catalogs instead of using filenames')
     cmdline.add_argument("files", nargs="+",
                          help="list of input filenames")
     args = cmdline.parse_args()
@@ -44,7 +48,7 @@ if __name__ == "__main__":
     # find the number of apertures
     n_sources = numpy.max(segmentation)
     logger.info("Found %d sources" % (n_sources))
-    #n_sources = 50
+    n_sources = 50
 
     # split and convert the list of radii
     grow_list = numpy.array([float(f) for f in args.grow_list.split(",")])
@@ -54,6 +58,7 @@ if __name__ == "__main__":
     # open all image files
     img_data = []
     img_files = []
+    img_basenames = []
     for img_fn in args.files:
         try:
             img_hdu = pyfits.open(img_fn)
@@ -73,6 +78,11 @@ if __name__ == "__main__":
 
         img_data.append(img) #[img_fn] = img
         img_files.append(img_fn)
+
+        # get the basename (filename without directory and extension) se we can name the output files approprately
+        dir,fn = os.path.split(img_fn)
+        bn,ext = os.path.splitext(fn)
+        img_basenames.append(bn)
 
     if (len(img_data) <= 0):
         logger.error("No image files to work on")
@@ -224,7 +234,23 @@ if __name__ == "__main__":
             fits_fn = "%s__chunks_grow%d.fits" % (bn, grow_radius)
             hdulist.writeto(fits_fn, overwrite=True)
 
-
     df.to_csv("grow_measure.csv", index=False)
 
 
+    if (args.merge):
+        # check how to re-name the output columns
+        have_good_names = False
+        if (args.rename is not None):
+            new_names = args.rename.split(",")
+            if (len(new_names) == len(img_files)):
+                have_good_names = True
+        if (not have_good_names):
+            new_names = img_basenames
+
+        # now rename all columns in all the photometry catalogs
+        for f in range(len(img_files)):
+            rename_columns = {}
+            for c in img_phot[f].columns:
+                rename_columns[c] = '%s_%s' % (new_names[f], c)
+            img_phot[f].rename(columns=rename_columns, inplace=True)
+            img_phot[f].info()
