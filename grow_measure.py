@@ -28,8 +28,8 @@ if __name__ == "__main__":
                          help="segmentation filename defining regions")
     cmdline.add_argument("--grow", dest="grow_list", type=str, default="0",
                          help='list of grow steps')
-    cmdline.add_argument("--merge", dest="merge", default=False, action='store_true',
-                         help='merge all catalogs at the end')
+    cmdline.add_argument("--merge", dest="merge", default=None, type=str,
+                         help='filename for merged catalogs at the end')
     cmdline.add_argument("--rename", dest="rename", default=None, type=str,
                          help='rename catalogs instead of using filenames')
     cmdline.add_argument("files", nargs="+",
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     # find the number of apertures
     n_sources = numpy.max(segmentation)
     logger.info("Found %d sources" % (n_sources))
-    n_sources = 50
+    # n_sources = 50
 
     # split and convert the list of radii
     grow_list = numpy.array([float(f) for f in args.grow_list.split(",")])
@@ -139,7 +139,7 @@ if __name__ == "__main__":
     dummy_after = [pyfits.PrimaryHDU()]
 
     img_chunks = [[[pyfits.PrimaryHDU()] for g in grow_list] for i in img_files]
-    print(img_chunks)
+    # print(img_chunks)
     for source_id in range(1, n_sources): # start counting at 1, 0 is the background
         logger.debug("Working on source %d" % (source_id))
 
@@ -203,7 +203,7 @@ if __name__ == "__main__":
 
                 img_phot[f].loc[source_id, phot_cols] = [mask_size, flux, overlap_pixels]
                 img_chunk = img_cutout.copy()
-                #img_chunk[~phot_mask] = numpy.NaN
+                img_chunk[~phot_mask] = numpy.NaN
                 img_chunks[f][i].append(pyfits.ImageHDU(data=img_chunk, name="PHOT_%d++%d" % (source_id, grow_radius)))
 
                 flux_vs_radius[f,i] = flux
@@ -237,7 +237,7 @@ if __name__ == "__main__":
     df.to_csv("grow_measure.csv", index=False)
 
 
-    if (args.merge):
+    if (args.merge is not None):
         # check how to re-name the output columns
         have_good_names = False
         if (args.rename is not None):
@@ -248,9 +248,22 @@ if __name__ == "__main__":
             new_names = img_basenames
 
         # now rename all columns in all the photometry catalogs
+        merged_df = None
         for f in range(len(img_files)):
             rename_columns = {}
             for c in img_phot[f].columns:
                 rename_columns[c] = '%s_%s' % (new_names[f], c)
             img_phot[f].rename(columns=rename_columns, inplace=True)
             img_phot[f].info()
+
+            if (merged_df is None):
+                merged_df = img_phot[f]
+            else:
+                merged_df = merged_df.merge(
+                    right=img_phot[f],
+                    how='outer',
+                    left_index=True, right_index=True,
+                    sort=False,
+                )
+        merged_df.info()
+        merged_df.to_csv(args.merge, index=False)
