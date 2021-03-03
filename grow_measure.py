@@ -69,7 +69,7 @@ if __name__ == "__main__":
 
         # mask out all illegal pixel values
         bad_data = (img < -1e25) | (img > 1e25)
-        #img[bad_data] = numpy.NaN
+        img[bad_data] = numpy.NaN
 
         img_data.append(img) #[img_fn] = img
         img_files.append(img_fn)
@@ -114,7 +114,7 @@ if __name__ == "__main__":
 
     # sys.exit(0)
 
-    cols = ['id', 'x1', 'x2', 'y1', 'y2', 'npixraw']
+    cols = ['id', 'x1', 'x2', 'y1', 'y2', 'npixraw', 'maxflux']
     grow_cols = ['npix%d' % g for g in grow_list]
     flux_cols = ['flux%d' % g for g in grow_list]
     overlap_cols = ['overlap%d' % g for g in grow_list]
@@ -165,6 +165,10 @@ if __name__ == "__main__":
 
 
         # now grow the mask for each of the growing radii
+        flux_vs_radius = numpy.zeros((len(img_data), len(grow_list)))
+        flux_vs_radius[:,:] = numpy.NaN
+        overlap_vs_radius = numpy.zeros((len(img_data), len(grow_list)))
+
         for i,grow_radius in enumerate(grow_list):
             grown_mask = scipy.ndimage.convolve(
                 input=seg_cutout,
@@ -191,6 +195,18 @@ if __name__ == "__main__":
                 img_chunk = img_cutout.copy()
                 #img_chunk[~phot_mask] = numpy.NaN
                 img_chunks[f][i].append(pyfits.ImageHDU(data=img_chunk, name="PHOT_%d++%d" % (source_id, grow_radius)))
+
+                flux_vs_radius[f,i] = flux
+                overlap_vs_radius[f,i] = overlap_pixels
+
+        # now we have all the data we need, let's calculate the maximum flux before running into other sources
+        overlapping = (overlap_vs_radius > 0)
+        flux_vs_radius[overlapping] = numpy.NaN
+        max_flux = numpy.nanmax(flux_vs_radius, axis=1)
+
+        # and add this data to the output data
+        for f in range(len(img_data)):
+            img_phot[f].loc[source_id, 'maxflux'] = max_flux[f]
 
     pyfits.HDUList(dummy_before).writeto("dummy_before.fits", overwrite=True)
     pyfits.HDUList(dummy_after).writeto("dummy_after.fits", overwrite=True)
