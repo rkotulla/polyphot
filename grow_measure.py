@@ -10,6 +10,7 @@ import scipy.ndimage
 import logging
 
 import astropy.io.fits as pyfits
+import astropy.io.votable
 import astropy.table
 
 import astropy.wcs
@@ -32,6 +33,13 @@ if __name__ == "__main__":
                          help='filename for merged catalogs at the end')
     cmdline.add_argument("--rename", dest="rename", default=None, type=str,
                          help='rename catalogs instead of using filenames')
+    cmdline.add_argument("--refcat", dest="refcat", default=None, type=str,
+                     help='source extractor reference catalog')
+    cmdline.add_argument("--refname", dest="refname", default='ref', type=str,
+                     help='how to rename the reference catalog in the final merged datafile')
+    cmdline.add_argument("--refcol", dest="refcol", default='NUMBER', type=str,
+                     help='column name in the reference catalog for source matching (default: NUMBER)')
+
     cmdline.add_argument("files", nargs="+",
                          help="list of input filenames")
     args = cmdline.parse_args()
@@ -48,7 +56,7 @@ if __name__ == "__main__":
     # find the number of apertures
     n_sources = numpy.max(segmentation)
     logger.info("Found %d sources" % (n_sources))
-    # n_sources = 50
+    # n_sources = 10
 
     # split and convert the list of radii
     grow_list = numpy.array([float(f) for f in args.grow_list.split(",")])
@@ -232,12 +240,29 @@ if __name__ == "__main__":
         for g, grow_radius in enumerate(grow_list):
             hdulist = pyfits.HDUList(img_chunks[i][g])
             fits_fn = "%s__chunks_grow%d.fits" % (bn, grow_radius)
+            logger.info("Writing grown chunks to %s" % (fits_fn))
             hdulist.writeto(fits_fn, overwrite=True)
 
     df.to_csv("grow_measure.csv", index=False)
 
 
+    # open the reference catalog if requested
+    ref_table = None
+    if (args.refcat is not None):
+        refcat = None
+        logger.info("Importing additional info from reference catalog (%s)" % (args.refcat))
+        try:
+            tab = astropy.io.votable.parse_single_table(args.refcat).to_table()
+            print(tab)
+        except Exception as e:
+            logger.error(e)
+            tab = None
+        if (tab is not None):
+            ref_table = tab.to_pandas()
+            # ref_table.info()
+
     if (args.merge is not None):
+        logger.info("Generating merged catalog")
         # check how to re-name the output columns
         have_good_names = False
         if (args.rename is not None):
@@ -254,7 +279,7 @@ if __name__ == "__main__":
             for c in img_phot[f].columns:
                 rename_columns[c] = '%s_%s' % (new_names[f], c)
             img_phot[f].rename(columns=rename_columns, inplace=True)
-            img_phot[f].info()
+            # img_phot[f].info()
 
             if (merged_df is None):
                 merged_df = img_phot[f]
@@ -265,5 +290,18 @@ if __name__ == "__main__":
                     left_index=True, right_index=True,
                     sort=False,
                 )
+
+        # also merge in the ref-table, if available
+        if (ref_table is not None):
+            for c in ref_table.columns:
+                rename_columns[c] = '%s_%s' % (args.refname, c)
+            merge_column = "%s_%s" % (args.refname, args.refcol)
+            ref_table.rename(columns=rename_columns, inplace=True)
+            merged_df = merged_df.merge(
+                right=ref_table,
+                how='outer',
+                left_index=True, right_on=merge_column,
+            )
+
         merged_df.info()
         merged_df.to_csv(args.merge, index=False)
