@@ -15,8 +15,127 @@ import astropy.table
 
 import astropy.wcs
 import pandas
+import threading
+import queue
+import multiprocessing
 
 # bufferzone = 3
+
+class thread_grow_and_measure (threading.Thread):
+
+    def __init__(self, segmentation, buffer_size,
+                 img_data, grow_list, source_queue, output_df,
+                 kernels, img_chunks,
+                 worker_id=0):
+
+        threading.Thread.__init__(self)
+
+        self.segmentation = segmentation
+        self.buffer_size = buffer_size
+        self.img_data = img_data
+        self.grow_list = grow_list
+        self.source_queue = source_queue
+        self.output_df = output_df
+        self.worker_id = worker_id
+        self.kernels = kernels
+        self.img_chunks = img_chunks
+
+        self.logger = logging.getLogger("Worker%02d" % (self.worker_id))
+
+        self.quit = False
+
+    def run(self):
+
+        # prepare what we need for all sources
+        idx_y, idx_x = numpy.indices(self.segmentation.shape)
+        buffer_size = self.buffer_size
+        self.logger.info("Worker starting up")
+        while (not self.quit):
+
+            source_id = self.source_queue.get()
+            if (source_id is None):
+                self.source_queue.task_done()
+                self.logger.info("Received termination signal, shutting down")
+                break
+
+            self.logger.debug("Working on source %d" % (source_id))
+
+            # find maximum extent of source
+            this_source = (self.segmentation == source_id)
+            x1 = numpy.min(idx_x[this_source])
+            x2 = numpy.max(idx_x[this_source])
+            y1 = numpy.min(idx_y[this_source])
+            y2 = numpy.max(idx_y[this_source])
+
+            n_pixels = numpy.sum(this_source)
+            # df.loc[source_id, ['id', 'x1', 'x2', 'y1', 'y2', 'npixraw']] = [source_id, x1, x2, y1, y2, n_pixels]
+            for i in range(len(self.img_data)):
+                self.output_df[i].loc[source_id, ['id', 'x1', 'x2', 'y1', 'y2', 'npixraw']] = [source_id, x1, x2, y1, y2,
+                                                                                         n_pixels]
+
+            # now get a cutout from the segmentation mask
+            _x1 = numpy.max([0, x1 - buffer_size])
+            _x2 = numpy.min([segmentation.shape[1], x2 + buffer_size]) + 1
+            _y1 = numpy.max([0, y1 - buffer_size])
+            _y2 = numpy.min([segmentation.shape[1], y2 + buffer_size]) + 1
+            seg_cutout = segmentation[_y1:_y2, _x1:_x2].copy()
+
+            # dummy_before.append(pyfits.ImageHDU(seg_cutout.copy()))
+
+            # set all pixels outside the current source to 0
+            self.logger.debug(seg_cutout.shape)
+            bad = (seg_cutout != source_id)
+            other_source = (seg_cutout != source_id) & (seg_cutout > 0)
+            self.logger.debug(numpy.sum(bad))
+            seg_cutout[bad] = 0  # seg_cutout != source_id] = 0
+            # dummy_after.append(pyfits.ImageHDU(data=seg_cutout.copy(),
+            #                                    name='SEGM_%d' % (source_id)))
+
+            # now grow the mask for each of the growing radii
+            flux_vs_radius = numpy.zeros((len(img_data), len(grow_list)))
+            flux_vs_radius[:, :] = numpy.NaN
+            overlap_vs_radius = numpy.zeros((len(img_data), len(grow_list)))
+
+            for i, grow_radius in enumerate(grow_list):
+                grown_mask = scipy.ndimage.convolve(
+                    input=seg_cutout,
+                    weights=self.kernels[i],
+                    mode='constant', cval=0,
+                )
+                phot_mask = grown_mask >= 1
+                grown_mask[phot_mask] = 1
+                # dummy_after.append(pyfits.ImageHDU(data=grown_mask.copy(),
+                #                                    name='SEGM_%d++%d' % (source_id, grow_radius)))
+
+                # get some info for the photometry masks
+                mask_size = numpy.nansum(phot_mask)
+
+                phot_cols = ['npix%d' % grow_radius, 'flux%d' % grow_radius, 'overlap%d' % grow_radius]
+                for f, img in enumerate(img_data):
+                    img_cutout = img[_y1:_y2, _x1:_x2]
+                    flux = numpy.sum(img_cutout[phot_mask])
+
+                    # check if any of the new pixels now overlap other sources
+                    overlap_pixels = numpy.sum(other_source & phot_mask)
+
+                    img_phot[f].loc[source_id, phot_cols] = [mask_size, flux, overlap_pixels]
+                    img_chunk = img_cutout.copy()
+                    img_chunk[~phot_mask] = numpy.NaN
+                    self.img_chunks[f][i].append(pyfits.ImageHDU(data=img_chunk, name="PHOT_%d++%d" % (source_id, grow_radius)))
+
+                    flux_vs_radius[f, i] = flux
+                    overlap_vs_radius[f, i] = overlap_pixels
+
+            # now we have all the data we need, let's calculate the maximum flux before running into other sources
+            overlapping = (overlap_vs_radius > 0)
+            flux_vs_radius[overlapping] = numpy.NaN
+            max_flux = numpy.nanmax(flux_vs_radius, axis=1)
+
+            # and add this data to the output data
+            for f in range(len(img_data)):
+                self.output_df[f].loc[source_id, 'maxflux'] = max_flux[f]
+
+            self.source_queue.task_done()
 
 if __name__ == "__main__":
 
@@ -39,6 +158,8 @@ if __name__ == "__main__":
                      help='how to rename the reference catalog in the final merged datafile')
     cmdline.add_argument("--refcol", dest="refcol", default='NUMBER', type=str,
                      help='column name in the reference catalog for source matching (default: NUMBER)')
+    cmdline.add_argument("--nthreads", dest="n_threads", default=1, type=int,
+                     help='number of parallel worker threads')
 
     cmdline.add_argument("files", nargs="+",
                          help="list of input filenames")
@@ -110,6 +231,7 @@ if __name__ == "__main__":
     kernels = [None] * grow_list.shape[0]
     kernels_hdu = [pyfits.PrimaryHDU()]
 
+
     for i, grow_radius in enumerate(grow_list):
         logger.debug("Generating kernel for radius = %.1f" % (grow_radius))
         k = kr.copy()
@@ -138,93 +260,49 @@ if __name__ == "__main__":
     overlap_cols = ['overlap%d' % g for g in grow_list]
     all_cols = cols + grow_cols + flux_cols + overlap_cols
     df = pandas.DataFrame(numpy.zeros((n_sources, len(all_cols))), columns=all_cols)
-    idx_y, idx_x = numpy.indices(segmentation.shape)
     df.info()
 
     img_phot = [pandas.DataFrame(numpy.zeros((n_sources, len(all_cols))), columns=all_cols) for i in img_files]
+    img_chunks = [[[pyfits.PrimaryHDU()] for g in grow_list] for i in img_files]
+
+    # start parallel workers
+    workers = []
+    source_queue = multiprocessing.JoinableQueue()
+    for i in range(args.n_threads):
+        t = thread_grow_and_measure(
+            segmentation=segmentation,
+            buffer_size=buffer_size,
+            img_data=img_data,
+            grow_list=grow_list,
+            source_queue=source_queue,
+            output_df=img_phot,
+            kernels=kernels,
+            img_chunks=img_chunks,
+            worker_id=i+1,
+        )
+        t.daemon = True
+        t.start()
+        workers.append(t)
+
+    # handout all jobs
+    for source_id in range(1, n_sources):
+        source_queue.put(source_id)
+
+    # also queue up termination signals
+    for w in workers:
+        source_queue.put(None)
+
+    # Now wait for all work to be done
+    source_queue.join()
+
 
     dummy_before = [pyfits.PrimaryHDU()]
     dummy_after = [pyfits.PrimaryHDU()]
 
-    img_chunks = [[[pyfits.PrimaryHDU()] for g in grow_list] for i in img_files]
     # print(img_chunks)
     for source_id in range(1, n_sources): # start counting at 1, 0 is the background
-        logger.debug("Working on source %d" % (source_id))
-
-        # find maximum extent of source
-        this_source = (segmentation == source_id)
-        x1 = numpy.min(idx_x[this_source])
-        x2 = numpy.max(idx_x[this_source])
-        y1 = numpy.min(idx_y[this_source])
-        y2 = numpy.max(idx_y[this_source])
-
-        n_pixels = numpy.sum(this_source)
-        df.loc[source_id, ['id', 'x1','x2', 'y1', 'y2', 'npixraw']] = [source_id, x1,x2,y1,y2, n_pixels]
-        for i in range(len(img_files)):
-            img_phot[i].loc[source_id, ['id', 'x1','x2', 'y1', 'y2', 'npixraw']] = [source_id, x1,x2,y1,y2, n_pixels]
-
-        # now get a cutout from the segmentation mask
-        _x1 = numpy.max([0, x1-buffer_size])
-        _x2 = numpy.min([segmentation.shape[1], x2+buffer_size]) + 1
-        _y1 = numpy.max([0, y1-buffer_size])
-        _y2 = numpy.min([segmentation.shape[1], y2+buffer_size]) + 1
-        seg_cutout = segmentation[_y1:_y2, _x1:_x2].copy()
-
-        dummy_before.append(pyfits.ImageHDU(seg_cutout.copy()))
-
-        # set all pixels outside the current source to 0
-        logger.debug(seg_cutout.shape)
-        bad = (seg_cutout != source_id)
-        other_source = (seg_cutout != source_id) & (seg_cutout > 0)
-        logger.debug(numpy.sum(bad))
-        seg_cutout[bad] = 0 #seg_cutout != source_id] = 0
-        dummy_after.append(pyfits.ImageHDU(data=seg_cutout.copy(),
-                                           name='SEGM_%d' % (source_id)))
-
-
-        # now grow the mask for each of the growing radii
-        flux_vs_radius = numpy.zeros((len(img_data), len(grow_list)))
-        flux_vs_radius[:,:] = numpy.NaN
-        overlap_vs_radius = numpy.zeros((len(img_data), len(grow_list)))
-
-        for i,grow_radius in enumerate(grow_list):
-            grown_mask = scipy.ndimage.convolve(
-                input=seg_cutout,
-                weights=kernels[i],
-                mode='constant', cval=0,
-            )
-            phot_mask = grown_mask >= 1
-            grown_mask[phot_mask] = 1
-            dummy_after.append(pyfits.ImageHDU(data=grown_mask.copy(),
-                                               name='SEGM_%d++%d' % (source_id, grow_radius)))
-
-            # get some info for the photometry masks
-            mask_size = numpy.nansum(phot_mask)
-
-            phot_cols = ['npix%d' % grow_radius, 'flux%d' % grow_radius, 'overlap%d' % grow_radius]
-            for f, img in enumerate(img_data):
-                img_cutout = img[_y1:_y2, _x1:_x2]
-                flux = numpy.sum(img_cutout[phot_mask])
-
-                # check if any of the new pixels now overlap other sources
-                overlap_pixels = numpy.sum( other_source & phot_mask )
-
-                img_phot[f].loc[source_id, phot_cols] = [mask_size, flux, overlap_pixels]
-                img_chunk = img_cutout.copy()
-                img_chunk[~phot_mask] = numpy.NaN
-                img_chunks[f][i].append(pyfits.ImageHDU(data=img_chunk, name="PHOT_%d++%d" % (source_id, grow_radius)))
-
-                flux_vs_radius[f,i] = flux
-                overlap_vs_radius[f,i] = overlap_pixels
-
-        # now we have all the data we need, let's calculate the maximum flux before running into other sources
-        overlapping = (overlap_vs_radius > 0)
-        flux_vs_radius[overlapping] = numpy.NaN
-        max_flux = numpy.nanmax(flux_vs_radius, axis=1)
-
-        # and add this data to the output data
-        for f in range(len(img_data)):
-            img_phot[f].loc[source_id, 'maxflux'] = max_flux[f]
+        # now done in parallel
+        pass
 
     pyfits.HDUList(dummy_before).writeto("dummy_before.fits", overwrite=True)
     pyfits.HDUList(dummy_after).writeto("dummy_after.fits", overwrite=True)
