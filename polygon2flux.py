@@ -17,6 +17,19 @@ import logging
 
 # bufferzone = 3
 
+def make_round_kernel(size):
+
+    k = numpy.zeros((2*size+1, 2*size+1), dtype=numpy.float)
+
+    _iy,_ix = numpy.indices(k.shape, dtype=numpy.float)
+    _ix -= size + 1
+    _iy -= size + 1
+    _radius = numpy.hypot(_ix, _iy)
+    k[_radius <= size] = 1.
+
+    return k
+
+
 def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize=1.,
                      generate_check_images=False):
 
@@ -40,9 +53,11 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
     # print(index_xy.shape)
 
     #edge_kernel = numpy.ones((2*edgewidth+1, 2*edgewidth+1))
-    dead_kernel = numpy.ones((2*dead_pixels+1, 2*dead_pixels+1))
-    sky_kernel = numpy.ones((2*sky_pixels+1, 2*sky_pixels+1))
+    # dead_kernel = numpy.ones((2*dead_pixels+1, 2*dead_pixels+1))
+    # sky_kernel = numpy.ones((2*sky_pixels+1, 2*sky_pixels+1))
 
+    dead_kernel = make_round_kernel(dead_pixels)
+    sky_kernel = make_round_kernel(sky_pixels)
 
     polygon_data = []
 
