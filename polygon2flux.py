@@ -22,8 +22,8 @@ def make_round_kernel(size):
     k = numpy.zeros((2*size+1, 2*size+1), dtype=numpy.float)
 
     _iy,_ix = numpy.indices(k.shape, dtype=numpy.float)
-    _ix -= size + 1
-    _iy -= size + 1
+    _ix -= size
+    _iy -= size
     _radius = numpy.hypot(_ix, _iy)
     k[_radius <= size] = 1.
 
@@ -58,6 +58,9 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
 
     dead_kernel = make_round_kernel(dead_pixels)
     sky_kernel = make_round_kernel(sky_pixels)
+
+    pyfits.PrimaryHDU(data=dead_kernel).writeto("poly2flux_kernel_dead.fits", overwrite=True)
+    pyfits.PrimaryHDU(data=sky_kernel).writeto("poly2flux_kernel_sky.fits", overwrite=True)
 
     polygon_data = []
 
