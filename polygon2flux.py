@@ -69,11 +69,17 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
     check_sky = [pyfits.PrimaryHDU()]
     check_source_sky = [pyfits.PrimaryHDU()]
 
+    polygon_catalog = pandas.DataFrame(
+        columns=['center_x', 'center_y',
+                 'src_flux', 'src_area',
+                 'sky_median', 'sky_mean', 'sky_std', 'sky_area'
+                 ],
+    )
     for ipoly, polygon in enumerate(polygon_list):
 
         # sys.stdout.write(".")
         # sys.stdout.flush()
-        logger.info("working on polygon %d of %d" % (ipoly+1, len(polygon_list)))
+        logger.debug("working on polygon %d of %d" % (ipoly+1, len(polygon_list)))
 
         # first, convert ra/dec to x/y
         xy = wcs.all_world2pix(polygon, 0)
@@ -129,7 +135,7 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
         center_x = -1
         center_y = -1
         edge_mean = edge_median = edge_area = -1
-        sky_mean = sky_median = sky_area = -1
+        sky_mean = sky_median = sky_area = sky_std = -1
 
 
         if (n_pixels >= 1):
@@ -147,7 +153,21 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
             edge_median = numpy.nanmedian( image_region[sky_only_pixels] )
             edge_area = numpy.sum( sky_only_pixels )
 
+            sky_mean = numpy.nanmean( image_region[sky_only_pixels])
+            sky_median = numpy.nanmedian(image_region[sky_only_pixels])
+            sky_std = numpy.nanstd(image_region[sky_only_pixels])
+            sky_area = numpy.sum(sky_only_pixels)
+
         polygon_data.append([n_pixels, total_flux, center_x, center_y, edge_mean, edge_median, edge_area])
+
+        polygon_catalog.loc[ipoly, 'center_x'] = center_x
+        polygon_catalog.loc[ipoly, 'center_y'] = center_y
+        polygon_catalog.loc[ipoly, 'src_flux'] = total_flux
+        polygon_catalog.loc[ipoly, 'src_area'] = numpy.sum(inside2d)
+        polygon_catalog.loc[ipoly, 'sky_median'] = sky_median
+        polygon_catalog.loc[ipoly, 'sky_mean'] = sky_mean
+        polygon_catalog.loc[ipoly, 'sky_std'] = sky_std
+        polygon_catalog.loc[ipoly, 'sky_area'] = sky_area
 
         # continue
 
@@ -178,9 +198,11 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
 
     polygon_data = numpy.array(polygon_data)
 
+    polygon_catalog['flux_bgsub'] = polygon_catalog['src_flux'] - polygon_catalog['src_area']*polygon_catalog['sky_median']
+
     if (generate_check_images):
-        return polygon_data, (check_sources, check_dead, check_sky, check_source_sky)
-    return polygon_data
+        return polygon_catalog, (check_sources, check_dead, check_sky, check_source_sky)
+    return polygon_catalog
 
 if __name__ == "__main__":
 
@@ -200,20 +222,43 @@ if __name__ == "__main__":
     cmdline.add_argument("--nthreads", dest="n_threads", default=1, type=int,
                      help='number of parallel worker threads')
 
+    cmdline.add_argument("--distance", dest="distance", default=0, type=float,
+                     help='distance to source in Mpc')
+    cmdline.add_argument("--calibrate", dest="calibrate", default=1.0, type=str, nargs="*",
+                     help='calibration factor (format: filter:factor; e.g.: ha:1.e5e-9)')
+
     cmdline.add_argument("--region", dest="region_fn", default=None, type=str,
                          help='region filename for source definition')
+    cmdline.add_argument("--output", dest="output", default="polyflux.csv", type=str,
+                         help='filename for output catalog')
     cmdline.add_argument("files", nargs="+",
                          help="list of input filenames")
     args = cmdline.parse_args()
 
-    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG if args.debug else logging.INFO)
+    logging.basicConfig(format='%(name)s -- %(levelname)s: %(message)s', level=logging.DEBUG if args.debug else logging.INFO)
     logger = logging.getLogger("PolyFlux")
     logger.info("Sky parameters: %f // %f" % (args.deadspace, args.skywidth))
+
+    # parse the calibration constants
+    calibration_factors = {}
+    print(args.calibrate)
+    for calib in args.calibrate:
+        items = calib.split(":")
+        if (len(items) == 2):
+            filtername = items[0]
+            factor = float(items[1])
+            calibration_factors[filtername] = factor
+
+    distance_cm = 1.0
+    if (args.distance > 0):
+        distance_cm = args.distance * 3.0857e24 # cm/Mpc
+        logger.info("Using distance of %.2f Mpc (%g cm)" % (args.distance, distance_cm))
 
     #
     # Now read the region file
     #
     src_polygons = []
+    lines = []
     with open(args.region_fn, "r") as regfile:
         lines = regfile.readlines()
         logger.info("Read %d lines" % (len(lines)))
@@ -242,19 +287,29 @@ if __name__ == "__main__":
     #
     # Let's run the integration code on all files, one after another
     #
+    master_catalog = None
     for image_fn in args.files:
 
-        logger.info("Working on image file %s (regions: %s)" % (image_fn, args.region_fn))
+        name,_ = os.path.splitext(image_fn)
+        if (image_fn.find(":") > 0):
+            items = image_fn.split(":")
+            if (len(items) == 2):
+                image_fn = items[0]
+                name = items[1]
+
+        logger.info("Working on image file %s (regions: %s // name: %s)" % (image_fn, args.region_fn, name))
+        named_logger = logging.getLogger(name)
 
         #
         # Now lets read the image
         #
+        named_logger.debug("Reading %s" % (image_fn))
         image_hdu = pyfits.open(image_fn)
         # image_hdu.info()
 
         image_data = image_hdu[0].data
         wcs = astropy.wcs.WCS(image_hdu[0].header)
-        print(wcs)
+        # print(wcs)
 
         # photflam = image_hdu['SCI'].header['PHOTFLAM']
         # photplam = image_hdu['SCI'].header['PHOTPLAM']
@@ -265,7 +320,7 @@ if __name__ == "__main__":
         
         # print("integrating sky polygons")
         # _, sky_data = measure_polygons(sky_polygons, image_data, wcs)
-        print("integrating source polygons")
+        named_logger.info("integrating source polygons")
         src_data, check_hdulists = measure_polygons(src_polygons, image_data, wcs,
                                                 deadspace=args.deadspace,
                                                 skysize=args.skywidth,
@@ -277,78 +332,33 @@ if __name__ == "__main__":
         pyfits.HDUList(check_sky).writeto("check_sky.fits", overwrite=True)
         pyfits.HDUList(check_source_sky).writeto("check_source_sky.fits", overwrite=True)
 
+        # src_data.info()
 
-        sys.exit(0)
+        # apply flux calibrations
+        calib_factor = 1.0
+        if (name in calibration_factors):
+            calib_factor = calibration_factors[name]
+            named_logger.info("Apply calibration factor: %g" % (calib_factor))
 
-        src_mask, src_edges = src_images
-        # pyfits.PrimaryHDU(data=sky_mask).writeto("sky_mask.fits", overwrite=True)
-        pyfits.PrimaryHDU(data=src_mask).writeto("src_mask.fits", overwrite=True)
-        pyfits.PrimaryHDU(data=src_edges).writeto("src_edges.fits", overwrite=True)
+        src_data['calib_flux'] = src_data['flux_bgsub'] * calib_factor
 
-        #
-        # Figure out the average sky background level
-        #
-        median_sky_level = numpy.median( sky_data[:,1]/sky_data[:,0] )
-        print("Median sky = %f" % (median_sky_level))
+        # convert flux to luminosity (multiply with 4*pi*d^2)
+        named_logger.info("calculating luminosity from flux and distance")
+        src_data['calib_luminosity'] = src_data['calib_flux'] * 4 * numpy.pi * distance_cm**2
 
-        # now apply a sky background subtraction for all source polygons
-        background_subtracted_src_data = src_data.copy()
-        background_subtracted_src_data[:,1] -= background_subtracted_src_data[:,0] * median_sky_level
+        new_column_names = ["%s_%s" % (name, col) for col in src_data.columns]
+        column_translate = dict(zip(src_data.columns, new_column_names))
+        src_data.rename(columns=column_translate, inplace=True)
+        # src_data.info()
 
-        background_subtracted_src_data[:,4] -= median_sky_level
-        background_subtracted_src_data[:,5] -= median_sky_level
+        if (master_catalog is None):
+            master_catalog = src_data
+        else:
+            master_catalog = master_catalog.merge(src_data, how='outer', left_index=True, right_index=True)
 
-        df = pandas.DataFrame({
-            "PolyArea": background_subtracted_src_data[:,0],
-            "IntegratedFlux": background_subtracted_src_data[:,1],
-            "Mean_X": background_subtracted_src_data[:,2] + 1, # add 1 since fits starts counting at 1
-            "Mean_Y": background_subtracted_src_data[:,3] + 1,
-            "Edge_Mean": background_subtracted_src_data[:,4],
-            "Edge_Median": background_subtracted_src_data[:,5],
-            "Edge_Area": background_subtracted_src_data[:,6],
-            })
+        named_logger.info("done with image %s" % (image_fn))
 
-        bad_photometry = df['IntegratedFlux'] <= 0
-        
-        df['InstrumentalMagnitude'] = -2.5*numpy.log10(df['IntegratedFlux'])
-        df['Magnitude_AB'] = df['InstrumentalMagnitude'] + zp_ab
-
-        df['InstrumentalMagnitude'][bad_photometry] = 99.999
-        df['Magnitude_AB'][bad_photometry] = 99.999
-
-        # add your conversion here
-        df['PolyMean'] = df['IntegratedFlux'] / df['PolyArea']
-
-        df['area_cm2'] = df['PolyArea'] * 1.6e39
-        df['transmission'] = df['PolyMean'] / df['Edge_Median']
-        df['optical_depth'] = -1 * numpy.log(df['transmission'])
-        
-        transmission_constant_f435w = 1.4e21
-        df['number_atoms'] = transmission_constant_f435w * df['transmission'] # for the F435W filter
-        mass_per_atom = 2.2e-24 # that's in grams
-        df['dustmass_grams'] = df['number_atoms'] * mass_per_atom * df['area_cm2']
-        df['dustmass_solarmasses'] = df['dustmass_grams'] / 2.e33
-
-        print(df['dustmass_solarmasses'])
-
-        # convert mean_x/mean_y to ra/dec
-        mean_ra_dec = wcs.all_pix2world(df['Mean_X'], df['Mean_Y'], 1.)
-        # print(mean_ra_dec)
-        df['RA'] = mean_ra_dec[0]
-        df['DEC'] = mean_ra_dec[1]
-
-        df.info()
-        df.to_csv(image_fn[:-5]+"_polygonflux.csv")
-
-        # also save as a votable for ds9
-        table = astropy.table.Table.from_pandas(df)
-        table.write(image_fn[:-5]+"_polygonflux.vot", format='votable', overwrite=True)
-        
-        # print("\n\nSKY:")
-        # print(sky_data)
-        # print("\n\nSources:")
-        # print(src_data)
-
-        print("done with image %s" % (image_fn))
-
-    print("all done!")
+    master_catalog.info()
+    logger.info("writing final catalog to %s" % (args.output))
+    master_catalog.to_csv(args.output, index=False)
+    logger.info("all done!")
