@@ -14,6 +14,7 @@ import astropy.wcs
 import pandas
 import argparse
 import logging
+import ephem
 
 # bufferzone = 3
 
@@ -204,6 +205,50 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
         return polygon_catalog, (check_sources, check_dead, check_sky, check_source_sky)
     return polygon_catalog
 
+
+
+def read_polygons_from_ds9_region_file(fn):
+
+    #
+    # Now read the region file
+    #
+    src_polygons = []
+    lines = []
+    with open(fn, "r") as regfile:
+        lines = regfile.readlines()
+        logger.info("Read %d lines" % (len(lines)))
+
+    for line in lines:
+        if (not line.startswith("polygon(")):
+            # don't do anything
+            continue
+
+        coordinates_text = line.split("polygon(")[1].split(")")[0]
+        coordinates = coordinates_text.split(",")
+        # print(coordinates)
+
+        try:
+            coordinates2 = [float(c) for c in coordinates]
+            coordinates_radec = numpy.array(coordinates2).reshape((-1, 2))
+        except ValueError:
+            # this most likely means that coordinates are in H:M:S format
+            # easiest to use ephem to convert them to degrees
+            logger.info("Found coordinates in H:M:S system")
+            coordinates_radec = []
+            for c in range(0, len(coordinates), 2):
+                # print(coordinates[c], coordinates[c+1])
+                radec = ephem.Equatorial(coordinates[c], coordinates[c+1])
+                coordinates_radec.append([radec.ra, radec.dec])
+            coordinates_radec = numpy.rad2deg(numpy.array(coordinates_radec))
+
+        # print(coordinates2)
+
+        # print(coordinates_radec)
+
+        src_polygons.append(coordinates_radec)
+
+    return src_polygons
+
 if __name__ == "__main__":
 
     cmdline = argparse.ArgumentParser()
@@ -254,32 +299,7 @@ if __name__ == "__main__":
         distance_cm = args.distance * 3.0857e24 # cm/Mpc
         logger.info("Using distance of %.2f Mpc (%g cm)" % (args.distance, distance_cm))
 
-    #
-    # Now read the region file
-    #
-    src_polygons = []
-    lines = []
-    with open(args.region_fn, "r") as regfile:
-        lines = regfile.readlines()
-        logger.info("Read %d lines" % (len(lines)))
-
-    for line in lines:
-        if (not line.startswith("polygon(")):
-            # don't do anything
-            continue
-
-        coordinates_text = line.split("polygon(")[1].split(")")[0]
-        coordinates = coordinates_text.split(",")
-        # print(coordinates)
-
-        coordinates2 = [float(c) for c in coordinates]
-        # print(coordinates2)
-
-        coordinates_radec = numpy.array(coordinates2).reshape((-1,2))
-        # print(coordinates_radec)
-
-        src_polygons.append(coordinates_radec)
-
+    src_polygons = read_polygons_from_ds9_region_file(args.region_fn)
     logger.info("Found %d source polygons" % (len(src_polygons)))
 
     # sys.exit(0)
