@@ -368,11 +368,15 @@ if __name__ == "__main__":
             calib_factor = calibration_factors[name]
             named_logger.info("Apply calibration factor: %g" % (calib_factor))
 
+        src_data['src_flux_error'] = src_data['src_area'] * src_data['sky_std']
+
         src_data['calib_flux'] = src_data['flux_bgsub'] * calib_factor
+        src_data['calib_flux_error'] = src_data['src_flux_error'] * calib_factor
 
         # convert flux to luminosity (multiply with 4*pi*d^2)
         named_logger.info("calculating luminosity from flux and distance")
         src_data['calib_luminosity'] = src_data['calib_flux'] * 4 * numpy.pi * distance_cm**2
+        src_data['calib_luminosity_error'] = src_data['calib_flux_error'] * 4 * numpy.pi * distance_cm**2
 
         new_column_names = ["%s_%s" % (name, col) for col in src_data.columns]
         column_translate = dict(zip(src_data.columns, new_column_names))
