@@ -233,7 +233,7 @@ def read_polygons_from_ds9_region_file(fn):
         except ValueError:
             # this most likely means that coordinates are in H:M:S format
             # easiest to use ephem to convert them to degrees
-            logger.info("Found coordinates in H:M:S system")
+            logger.debug("Found coordinates in H:M:S system")
             coordinates_radec = []
             for c in range(0, len(coordinates), 2):
                 # print(coordinates[c], coordinates[c+1])
@@ -353,6 +353,14 @@ if __name__ == "__main__":
         pyfits.HDUList(check_source_sky).writeto("check_source_sky.fits", overwrite=True)
 
         # src_data.info()
+        # convert polygon center coordinates from native pixels to Ra/Dec
+        #src_data.info()
+        #print(src_data['center_x'].astype(numpy.float).to_numpy())
+        _ra,_dec = wcs.all_pix2world(src_data['center_x'].astype(numpy.float).to_numpy(),
+                                  src_data['center_y'].astype(numpy.float).to_numpy(), 1)
+        src_data['center_ra'] = _ra
+        src_data['center_dec'] = _dec
+        #print(radec)
 
         # apply flux calibrations
         calib_factor = 1.0
