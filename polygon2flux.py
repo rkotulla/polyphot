@@ -73,7 +73,7 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
     polygon_catalog = pandas.DataFrame(
         columns=['center_x', 'center_y',
                  'src_flux', 'src_area',
-                 'sky_median', 'sky_mean', 'sky_std', 'sky_area'
+                 'sky_median', 'sky_mean', 'sky_std', 'sky_area', 'sky_var',
                  ],
     )
     for ipoly, polygon in enumerate(polygon_list):
@@ -136,7 +136,7 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
         center_x = -1
         center_y = -1
         edge_mean = edge_median = edge_area = -1
-        sky_mean = sky_median = sky_area = sky_std = -1
+        sky_mean = sky_median = sky_area = sky_std = sky_var = -1
 
 
         if (n_pixels >= 1):
@@ -154,12 +154,22 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
             edge_median = numpy.nanmedian( image_region[sky_only_pixels] )
             edge_area = numpy.sum( sky_only_pixels )
 
-            sky_mean = numpy.nanmean( image_region[sky_only_pixels])
-            sky_median = numpy.nanmedian(image_region[sky_only_pixels])
-            sky_std = numpy.nanstd(image_region[sky_only_pixels])
+            sky_pixels = image_region[sky_only_pixels]
+            good = numpy.isfinite(sky_pixels)
+            for iteration in range(3):
+                _stats = numpy.nanpercentile(sky_pixels[good], [16,50,84])
+                _median = _stats[1]
+                _sigma = 0.5*(_stats[2]-_stats[0])
+                outlier = (sky_pixels > (_median + 3*_sigma)) | (sky_pixels < (_median - 3*_sigma))
+                good[outlier] = False
+
+            sky_mean = numpy.nanmean(sky_pixels[good])
+            sky_median = numpy.nanmedian(sky_pixels[good])
+            sky_std = numpy.nanstd(sky_pixels[good])
+            sky_var = numpy.nanvar(sky_pixels[good])
             sky_area = numpy.sum(sky_only_pixels)
 
-        polygon_data.append([n_pixels, total_flux, center_x, center_y, edge_mean, edge_median, edge_area])
+            polygon_data.append([n_pixels, total_flux, center_x, center_y, edge_mean, edge_median, edge_area])
 
         polygon_catalog.loc[ipoly, 'center_x'] = center_x
         polygon_catalog.loc[ipoly, 'center_y'] = center_y
@@ -169,6 +179,7 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
         polygon_catalog.loc[ipoly, 'sky_mean'] = sky_mean
         polygon_catalog.loc[ipoly, 'sky_std'] = sky_std
         polygon_catalog.loc[ipoly, 'sky_area'] = sky_area
+        polygon_catalog.loc[ipoly, 'sky_var'] = sky_var
 
         # continue
 
@@ -271,6 +282,8 @@ if __name__ == "__main__":
                      help='distance to source in Mpc')
     cmdline.add_argument("--calibrate", dest="calibrate", default=1.0, type=str, nargs="*",
                      help='calibration factor (format: filter:factor; e.g.: ha:1.e5e-9)')
+    cmdline.add_argument("--gain", dest="calibrate", default=1.0, type=str, nargs="*",
+                     help='gain (format: filter:gain; e.g.: ha:1.e5e-9; alternative: filter:!header_key)')
 
     cmdline.add_argument("--region", dest="region_fn", default=None, type=str,
                          help='region filename for source definition')
@@ -293,6 +306,20 @@ if __name__ == "__main__":
             filtername = items[0]
             factor = float(items[1])
             calibration_factors[filtername] = factor
+
+    # parse the gain values
+    gain_values = {}
+    print(args.gain)
+    for calib in args.gain:
+        items = calib.split(":")
+        if (len(items) == 2):
+            filtername = items[0]
+            value,key = None
+            try:
+                value = float(items[1])
+            except:
+                key = items[1]
+            gain_values[filtername] = (value,key)
 
     distance_cm = 1.0
     if (args.distance > 0):
@@ -329,6 +356,21 @@ if __name__ == "__main__":
 
         image_data = image_hdu[0].data
         wcs = astropy.wcs.WCS(image_hdu[0].header)
+
+        if (name not in gain_values):
+            gain = 1.
+        else:
+            (gain_value, gain_key) = gain_values[name]
+            if (gain_key is not None):
+                try:
+                    gain = image_hdu[0].header['GAIN']
+                    logger.info("Using GAIN = %.3f from header" % (gain))
+                except:
+                    gain = 1000.
+                    logger.info("Using fall-back GAIN = %.3f" % (gain))
+            else:
+                gain = gain_value
+
         # print(wcs)
 
         # photflam = image_hdu['SCI'].header['PHOTFLAM']
@@ -368,10 +410,18 @@ if __name__ == "__main__":
             calib_factor = calibration_factors[name]
             named_logger.info("Apply calibration factor: %g" % (calib_factor))
 
-        src_data['src_flux_error'] = src_data['src_area'] * src_data['sky_std']
+        sky_error = (src_data['src_area'] * src_data['sky_var']).astype(numpy.float).to_numpy()
+        src_error = gain * src_data['src_flux'].astype(numpy.float).to_numpy()
+        flx_error = numpy.fabs(src_error) + sky_error * gain**2
+        flx_error[flx_error < 0] = 1e30
+        # print(type(flx_error.to_numpy()))
+        src_data['src_flux_error'] = numpy.power(flx_error, 0.5) / gain
 
         src_data['calib_flux'] = src_data['flux_bgsub'] * calib_factor
         src_data['calib_flux_error'] = src_data['src_flux_error'] * calib_factor
+
+        if (args.debug):
+            print(src_data[['flux_bgsub','src_flux_error', 'sky_std', 'sky_var']].to_markdown())
 
         # convert flux to luminosity (multiply with 4*pi*d^2)
         named_logger.info("calculating luminosity from flux and distance")
