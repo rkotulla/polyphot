@@ -15,6 +15,8 @@ import pandas
 import argparse
 import logging
 import ephem
+import astropy.coordinates
+import astropy.units as u
 
 # bufferzone = 3
 
@@ -282,8 +284,11 @@ if __name__ == "__main__":
                      help='distance to source in Mpc')
     cmdline.add_argument("--calibrate", dest="calibrate", default=1.0, type=str, nargs="*",
                      help='calibration factor (format: filter:factor; e.g.: ha:1.e5e-9)')
-    cmdline.add_argument("--gain", dest="calibrate", default=1.0, type=str, nargs="*",
+    cmdline.add_argument("--gain", dest="gain", default=1.0, type=str, nargs="*",
                      help='gain (format: filter:gain; e.g.: ha:1.e5e-9; alternative: filter:!header_key)')
+
+    cmdline.add_argument("--distance_to_center", dest="center_coord", type=str, default=None,
+                         help="if provided, calculate distance between source and center (format: HMS+dms, eg 14:23:45+23:45:56)")
 
     cmdline.add_argument("--region", dest="region_fn", default=None, type=str,
                          help='region filename for source definition')
@@ -300,7 +305,7 @@ if __name__ == "__main__":
     # parse the calibration constants
     calibration_factors = {}
     print(args.calibrate)
-    for calib in args.calibrate:
+    for calib in args.calibrate: #.split(","):
         items = calib.split(":")
         if (len(items) == 2):
             filtername = items[0]
@@ -310,11 +315,11 @@ if __name__ == "__main__":
     # parse the gain values
     gain_values = {}
     print(args.gain)
-    for calib in args.gain:
+    for calib in args.gain: #.split(","):
         items = calib.split(":")
         if (len(items) == 2):
             filtername = items[0]
-            value,key = None
+            value,key = None,None
             try:
                 value = float(items[1])
             except:
@@ -329,8 +334,9 @@ if __name__ == "__main__":
     src_polygons = read_polygons_from_ds9_region_file(args.region_fn)
     logger.info("Found %d source polygons" % (len(src_polygons)))
 
-    # sys.exit(0)
-
+    center_pos = None
+    if (args.center_coord is not None):
+        center_pos = astropy.coordinates.SkyCoord(args.center_coord, unit=(u.hourangle,u.deg))
     #
     # Let's run the integration code on all files, one after another
     #
@@ -427,6 +433,15 @@ if __name__ == "__main__":
         named_logger.info("calculating luminosity from flux and distance")
         src_data['calib_luminosity'] = src_data['calib_flux'] * 4 * numpy.pi * distance_cm**2
         src_data['calib_luminosity_error'] = src_data['calib_flux_error'] * 4 * numpy.pi * distance_cm**2
+
+        if (center_pos is not None):
+            src_skycoords = astropy.coordinates.SkyCoord(src_data['center_ra'], src_data['center_dec'], unit=u.deg)
+            distances = src_skycoords.separation(center_pos)
+            src_data['center_distance_deg'] = distances.deg
+            # print(distances)
+
+            if (args.distance is not None):
+                src_data['center_distance_kpc'] = numpy.arctan(distances.rad) * args.distance * 1000.
 
         new_column_names = ["%s_%s" % (name, col) for col in src_data.columns]
         column_translate = dict(zip(src_data.columns, new_column_names))
