@@ -19,9 +19,15 @@ if __name__ == "__main__":
     cat['ha_dustcorr_lum'] = cat['ha_calib_luminosity'] * numpy.power(10., 0.4*A_R)
     cat['nuv_dustcorr_lum'] = cat['nuv_calib_luminosity'] * numpy.power(10., 0.4*A_NUV)
 
+    cat['ha_dustcorr_lum_error'] = cat['ha_calib_luminosity_error'] * numpy.power(10., 0.4*A_R)
+    cat['nuv_dustcorr_lum_error'] = cat['nuv_calib_luminosity_error'] * numpy.power(10., 0.4*A_NUV)
+
     # and convert to SFR
     cat['ha_sfr'] = cat['ha_dustcorr_lum'] * 7.9e-42
+    cat['ha_sfr_error'] = cat['ha_dustcorr_lum_error'] * 7.9e-42
+
     cat['nuv_sfr'] = cat['nuv_dustcorr_lum'] * 1.4e-28
+    cat['nuv_sfr_error'] = cat['nuv_dustcorr_lum_error'] * 1.4e-28
 
     print("Writing results")
     cat.to_csv(sys.argv[2], index=False)
