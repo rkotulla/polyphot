@@ -269,6 +269,8 @@ if __name__ == "__main__":
                          help="dry-run only, no database ingestion")
     cmdline.add_argument("--debug", dest="debug", default=False, action='store_true',
                          help="output debug output")
+    cmdline.add_argument("--checkimages", dest="checkimages", default=False, action='store_true',
+                         help="generate check-images")
 
     cmdline.add_argument("--deadspace", dest="deadspace", type=float, default=0.0,
                          help='spacing between source aperture and sky perimeter [arcsec]')
@@ -395,10 +397,12 @@ if __name__ == "__main__":
                                                     generate_check_images=True)
 
         (check_sources, check_dead, check_sky, check_source_sky) = check_hdulists
-        pyfits.HDUList(check_sources).writeto("check_sources.fits", overwrite=True)
-        pyfits.HDUList(check_dead).writeto("check_dead.fits", overwrite=True)
-        pyfits.HDUList(check_sky).writeto("check_sky.fits", overwrite=True)
-        pyfits.HDUList(check_source_sky).writeto("check_source_sky.fits", overwrite=True)
+
+        if (args.checkimages):
+            pyfits.HDUList(check_sources).writeto("check_sources.fits", overwrite=True)
+            pyfits.HDUList(check_dead).writeto("check_dead.fits", overwrite=True)
+            pyfits.HDUList(check_sky).writeto("check_sky.fits", overwrite=True)
+            pyfits.HDUList(check_source_sky).writeto("check_source_sky.fits", overwrite=True)
 
         # src_data.info()
         # convert polygon center coordinates from native pixels to Ra/Dec
