@@ -20,6 +20,26 @@ if __name__ == "__main__":
                          help="dry-run only, no database ingestion")
     cmdline.add_argument("--debug", dest="debug", default=False, action='store_true',
                          help="output debug output")
+    cmdline.add_argument("--mask", dest="mask_region_fn", default=None, type=str, nargs="*",
+                         help='region filename for source masking')
+    cmdline.add_argument("--response", dest="response", default=None, type=str,
+                         help='filename for response/flatfield frame')
+    cmdline.add_argument("--center", dest="center_coord", type=str, default=None,
+                         help="if provided, calculate distance between source and center (format: HMS+dms, eg 14:23:45+23:45:56)")
+    cmdline.add_argument("--distance", dest="distance", default=0, type=float,
+                     help='distance to source in Mpc')
+    cmdline.add_argument("--background", dest="background", default=0, type=float,
+                     help='background level')
+    cmdline.add_argument("--radii", dest="radii", default=0, type=float, nargs="+",
+                     help='radii bins')
+    cmdline.add_argument("--radius", dest="bin_unit", default="arcmin", type=str,
+                     help='unit for radii bins')
+    cmdline.add_argument("--autobg", dest="auto_background", default=0, type=int,
+                     help='unit for radii bins')
+    cmdline.add_argument("--output", dest="output_fn", default="output_profile.csv", type=str,
+                     help='output filename')
+
+
     cmdline.add_argument("files", nargs="+",
                          help="list of input filenames")
     cmdline.add_argument("--mask", dest="mask_region_fn", default=None, type=str, nargs="+",
