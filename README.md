@@ -25,6 +25,13 @@ follow-up processing.
 
 ![example polygon](docs/demo_ic342.jpg)
 
+In this example, the actual source region is selected by the green, 
+hashed polygon. The sky annulus, separated by some dead space, is shown in 
+the semi-transparent red region further out. Both width of the dead space
+region and the sky annulus can be freely configured, and sky estimation also
+includes some iterative sigma-clipping to avoid contamination due to nearby 
+source for more robust results.
+
 ## Usage and options
 
     polygon2flux.py --region=my_regions.reg --output=my_catalog.cat file1.fits:band1 file2.fits:band2
