@@ -2,7 +2,8 @@
 (c) Ralf Kotulla
 
 
-Small repository holding scripts for studying star formation regions in external galaxies (i.e. NOT the Milky Way).
+Small repository holding scripts for extracting photometry within arbitrarily  
+shaped polygons.
 
 The main functionality is implemented in the polgon2flux.py script.
 
