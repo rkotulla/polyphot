@@ -70,3 +70,26 @@ alternative: filter:!header_key)
 
 * **--distance_to_center** if provided, calculate distance between source 
 and center (format: HMS+dms, eg 14:23:45+23:45:56)
+
+
+
+### Full example call
+
+Below is one example listing a bunch of options, taken from a real-life run for the nearby galaxy IC342:
+
+    ./polygon2flux.py \
+        --region=regions3.reg \
+        wiyn/halpha_continuumsub.fits:ha \
+   	    galex/galex_nearUV.fits:nuv \
+        --deadspace=2 \
+        --skywidth=3 \
+	    --distance=3.3 \
+        --calibrate nuv:3.38e-28 ha:3.28e-18 \
+	    --gain ha:!GAIN nuv:4200   \
+        --distance_to_center=03:46:48+68:05:47 \
+	    --output ic342_polyphot.csv
+
+This command extracts photometry for a number of regions in both narrow-band H-alpha and GALEX near-UV data, 
+corrects them for local background using a sky annulus slightly outside of each polygon, calculates the 
+uncertainty of each measurement using the specified gain data, converts all raw integrated counts into physical
+units and even absolute luminosities, and writes the resulting multi-band catalog to file.
