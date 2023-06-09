@@ -23,7 +23,7 @@ follow-up processing.
 
 ## Example polygon
 
-![example polygon](documentation/demo_ic342.jpg)
+![example polygon](docs/demo_ic342.jpg)
 
 ## Usage and options
 
