@@ -23,7 +23,7 @@ follow-up processing.
 
 ## Example polygon
 
-![example polygon](docs/demo_ic342.jpg)
+![example polygon](docs/source/_static/demo_ic342.jpg)
 
 In this example, the actual source region is selected by the green, 
 hashed polygon. The sky annulus, separated by some dead space, is shown in 
