@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 
-import os
 import sys
 import astropy.io.fits as pyfits
 import astropy.wcs as astwcs
 import numpy
 import pandas
-import scipy
 import matplotlib.pyplot as plt
-import ephem
 import logging
 import argparse
 import astropy.coordinates
