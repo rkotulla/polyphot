@@ -44,11 +44,10 @@ name: Publish Python 🐍 distributions 📦 to PyPI
 
 on:
   push:
-    branches:
-      - main
-#  push:
-#    tags:
-#     - '*'
+#    branches:
+#      - main
+    tags:
+     - '*'
 
 jobs:
   build-and-publish:

@@ -6,12 +6,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "polyphot"
-version = "0.1.0"
+version = "0.1.1"
 
 authors = [
   { name="Ralf Kotulla", email="ralf.kotulla@gmail.com" },
 ]
-description = "basic instrument signature removal for the NIRWALS instrument on the SALT telescope"
+description = "Extract photometry from arbitrarily-shaped polygons"
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.8"
@@ -46,7 +46,7 @@ where = ['src']
 
 [tool.poetry]
 name='polyphot'
-version = "0.0.0"
+version = "0.1.1"
 description = "Extract photometry from arbitrarily-shaped polygons"
 readme = "README.md"
 license = { file="LICENSE" }
