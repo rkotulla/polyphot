@@ -34,7 +34,7 @@ source for more robust results.
 
 ## Usage and options
 
-    polygon2flux.py --region=my_regions.reg --output=my_catalog.cat file1.fits:band1 file2.fits:band2
+    polyphot --region=my_regions.reg --output=my_catalog.cat file1.fits:band1 file2.fits:band2
 
 ### Important command line options:
 
@@ -77,7 +77,7 @@ and center (format: HMS+dms, eg 14:23:45+23:45:56)
 
 Below is one example listing a bunch of options, taken from a real-life run for the nearby galaxy IC342:
 
-    ./polygon2flux.py \
+    polyphot \
         --region=regions3.reg \
         wiyn/halpha_continuumsub.fits:ha \
    	    galex/galex_nearUV.fits:nuv \

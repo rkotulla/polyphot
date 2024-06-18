@@ -262,7 +262,9 @@ def read_polygons_from_ds9_region_file(fn):
 
     return src_polygons
 
-if __name__ == "__main__":
+
+
+def main():
 
     cmdline = argparse.ArgumentParser()
     cmdline.add_argument("--dryrun", dest="dryrun", default=False, action='store_true',
@@ -280,14 +282,14 @@ if __name__ == "__main__":
     cmdline.add_argument("--merge", dest="merge", default=None, type=str,
                          help='filename for merged catalogs at the end')
     cmdline.add_argument("--nthreads", dest="n_threads", default=1, type=int,
-                     help='number of parallel worker threads')
+                         help='number of parallel worker threads')
 
     cmdline.add_argument("--distance", dest="distance", default=0, type=float,
-                     help='distance to source in Mpc')
+                         help='distance to source in Mpc')
     cmdline.add_argument("--calibrate", dest="calibrate", default=1.0, type=str, nargs="*",
-                     help='calibration factor (format: filter:factor; e.g.: ha:1.e5e-9)')
+                         help='calibration factor (format: filter:factor; e.g.: ha:1.e5e-9)')
     cmdline.add_argument("--gain", dest="gain", default=1.0, type=str, nargs="*",
-                     help='gain (format: filter:gain; e.g.: ha:1.e5e-9; alternative: filter:!header_key)')
+                         help='gain (format: filter:gain; e.g.: ha:1.e5e-9; alternative: filter:!header_key)')
 
     cmdline.add_argument("--distance_to_center", dest="center_coord", type=str, default=None,
                          help="if provided, calculate distance between source and center (format: HMS+dms, eg 14:23:45+23:45:56)")
@@ -300,14 +302,15 @@ if __name__ == "__main__":
                          help="list of input filenames")
     args = cmdline.parse_args()
 
-    logging.basicConfig(format='%(name)s -- %(levelname)s: %(message)s', level=logging.DEBUG if args.debug else logging.INFO)
+    logging.basicConfig(format='%(name)s -- %(levelname)s: %(message)s',
+                        level=logging.DEBUG if args.debug else logging.INFO)
     logger = logging.getLogger("PolyFlux")
     logger.info("Sky parameters: %f // %f" % (args.deadspace, args.skywidth))
 
     # parse the calibration constants
     calibration_factors = {}
     print(args.calibrate)
-    for calib in args.calibrate: #.split(","):
+    for calib in args.calibrate:  # .split(","):
         items = calib.split(":")
         if (len(items) == 2):
             filtername = items[0]
@@ -317,20 +320,20 @@ if __name__ == "__main__":
     # parse the gain values
     gain_values = {}
     print(args.gain)
-    for calib in args.gain: #.split(","):
+    for calib in args.gain:  # .split(","):
         items = calib.split(":")
         if (len(items) == 2):
             filtername = items[0]
-            value,key = None,None
+            value, key = None, None
             try:
                 value = float(items[1])
             except:
                 key = items[1]
-            gain_values[filtername] = (value,key)
+            gain_values[filtername] = (value, key)
 
     distance_cm = 1.0
     if (args.distance > 0):
-        distance_cm = args.distance * 3.0857e24 # cm/Mpc
+        distance_cm = args.distance * 3.0857e24  # cm/Mpc
         logger.info("Using distance of %.2f Mpc (%g cm)" % (args.distance, distance_cm))
 
     src_polygons = read_polygons_from_ds9_region_file(args.region_fn)
@@ -338,14 +341,14 @@ if __name__ == "__main__":
 
     center_pos = None
     if (args.center_coord is not None):
-        center_pos = astropy.coordinates.SkyCoord(args.center_coord, unit=(u.hourangle,u.deg))
+        center_pos = astropy.coordinates.SkyCoord(args.center_coord, unit=(u.hourangle, u.deg))
     #
     # Let's run the integration code on all files, one after another
     #
     master_catalog = None
     for image_fn in args.files:
 
-        name,_ = os.path.splitext(image_fn)
+        name, _ = os.path.splitext(image_fn)
         if (image_fn.find(":") > 0):
             items = image_fn.split(":")
             if (len(items) == 2):
@@ -386,14 +389,13 @@ if __name__ == "__main__":
         # zp_ab = -2.5*numpy.log10(photflam) - 5*numpy.log10(photplam) - 2.408
         # print("ZP_AB = %f" % (zp_ab))
         # # see https://www.stsci.edu/hst/instrumentation/acs/data-analysis/zeropoints
-        
-        
+
         # print("integrating sky polygons")
         # _, sky_data = measure_polygons(sky_polygons, image_data, wcs)
         named_logger.info("integrating source polygons")
         src_data, check_hdulists = measure_polygons(src_polygons, image_data, wcs,
-                                                deadspace=args.deadspace,
-                                                skysize=args.skywidth,
+                                                    deadspace=args.deadspace,
+                                                    skysize=args.skywidth,
                                                     generate_check_images=True)
 
         (check_sources, check_dead, check_sky, check_source_sky) = check_hdulists
@@ -406,13 +408,13 @@ if __name__ == "__main__":
 
         # src_data.info()
         # convert polygon center coordinates from native pixels to Ra/Dec
-        #src_data.info()
-        #print(src_data['center_x'].astype(float).to_numpy())
-        _ra,_dec = wcs.all_pix2world(src_data['center_x'].astype(float).to_numpy(),
-                                  src_data['center_y'].astype(float).to_numpy(), 1)
+        # src_data.info()
+        # print(src_data['center_x'].astype(float).to_numpy())
+        _ra, _dec = wcs.all_pix2world(src_data['center_x'].astype(float).to_numpy(),
+                                      src_data['center_y'].astype(float).to_numpy(), 1)
         src_data['center_ra'] = _ra
         src_data['center_dec'] = _dec
-        #print(radec)
+        # print(radec)
 
         # apply flux calibrations
         calib_factor = 1.0
@@ -422,7 +424,7 @@ if __name__ == "__main__":
 
         sky_error = (src_data['src_area'] * src_data['sky_var']).astype(float).to_numpy()
         src_error = gain * src_data['src_flux'].astype(float).to_numpy()
-        flx_error = numpy.fabs(src_error) + sky_error * gain**2
+        flx_error = numpy.fabs(src_error) + sky_error * gain ** 2
         flx_error[flx_error < 0] = 1e30
         # print(type(flx_error.to_numpy()))
         src_data['src_flux_error'] = numpy.power(flx_error, 0.5) / gain
@@ -431,12 +433,12 @@ if __name__ == "__main__":
         src_data['calib_flux_error'] = src_data['src_flux_error'] * calib_factor
 
         if (args.debug):
-            print(src_data[['flux_bgsub','src_flux_error', 'sky_std', 'sky_var']].to_markdown())
+            print(src_data[['flux_bgsub', 'src_flux_error', 'sky_std', 'sky_var']].to_markdown())
 
         # convert flux to luminosity (multiply with 4*pi*d^2)
         named_logger.info("calculating luminosity from flux and distance")
-        src_data['calib_luminosity'] = src_data['calib_flux'] * 4 * numpy.pi * distance_cm**2
-        src_data['calib_luminosity_error'] = src_data['calib_flux_error'] * 4 * numpy.pi * distance_cm**2
+        src_data['calib_luminosity'] = src_data['calib_flux'] * 4 * numpy.pi * distance_cm ** 2
+        src_data['calib_luminosity_error'] = src_data['calib_flux_error'] * 4 * numpy.pi * distance_cm ** 2
 
         if (center_pos is not None):
             src_skycoords = astropy.coordinates.SkyCoord(src_data['center_ra'], src_data['center_dec'], unit=u.deg)
@@ -463,3 +465,7 @@ if __name__ == "__main__":
     logger.info("writing final catalog to %s" % (args.output))
     master_catalog.to_csv(args.output, index=False)
     logger.info("all done!")
+
+
+if __name__ == "__main__":
+    main()

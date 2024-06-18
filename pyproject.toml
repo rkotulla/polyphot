@@ -34,7 +34,7 @@ dependencies = [
 "Bug Tracker" = "https://github.com/rkotulla/polyphot/issues"
 
 [project.scripts]
-polyphot = "polyphot.polygon2flux:main"
+polyphot = "polyphot.polyphot:main"
 
 [tool.setuptools]
 include-package-data = true
