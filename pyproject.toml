@@ -1,0 +1,70 @@
+[build-system]
+requires = [
+    "setuptools>=64.0.0",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "polyphot"
+version = "0.1.0"
+
+authors = [
+  { name="Ralf Kotulla", email="ralf.kotulla@gmail.com" },
+]
+description = "basic instrument signature removal for the NIRWALS instrument on the SALT telescope"
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "astropy",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "scipy",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/rkotulla/polyphot"
+"Bug Tracker" = "https://github.com/rkotulla/polyphot/issues"
+
+[project.scripts]
+polyphot = "polyphot.polygon2flux:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ['src']
+
+[tool.setuptools.package-data]
+
+[tool.poetry]
+name='polyphot'
+version = "0.0.0"
+description = "Extract photometry from arbitrarily-shaped polygons"
+readme = "README.md"
+license = { file="LICENSE" }
+authors = [
+  { name="Ralf Kotulla", email="ralf.kotulla@gmail.com" },
+]
+#license = { file="LICENSE" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+
+[tool.poetry-dynamic-versioning]
+enable = true
+vcs = "git"
+#style = "semver"
+style = 'pep440'
+
+
