@@ -22,9 +22,9 @@ import astropy.units as u
 
 def make_round_kernel(size):
 
-    k = numpy.zeros((2*size+1, 2*size+1), dtype=numpy.float)
+    k = numpy.zeros((2*size+1, 2*size+1), dtype=float)
 
-    _iy,_ix = numpy.indices(k.shape, dtype=numpy.float)
+    _iy,_ix = numpy.indices(k.shape, dtype=float)
     _ix -= size
     _iy -= size
     _radius = numpy.hypot(_ix, _iy)
@@ -92,9 +92,9 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
         # to speed things up, don't work on the whole image, but
         # rather only on the little area around and including the polygon
         #
-        min_xy = numpy.floor(numpy.min(xy, axis=0)).astype(numpy.int) - [bufferzone,bufferzone]
+        min_xy = numpy.floor(numpy.min(xy, axis=0)).astype(int) - [bufferzone,bufferzone]
         min_xy[min_xy < 0] = 0
-        max_xy = numpy.ceil(numpy.max(xy, axis=0)).astype(numpy.int) + [bufferzone,bufferzone]
+        max_xy = numpy.ceil(numpy.max(xy, axis=0)).astype(int) + [bufferzone,bufferzone]
         # print(min_xy, max_xy)
 
         max_x, max_y = max_xy[0], max_xy[1]
@@ -114,9 +114,9 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
         # print(inside2d.shape)
 
         # to get at the border of the polygon, convolve the mask with a small filter
-        dead_widened = scipy.ndimage.convolve(inside2d.astype(numpy.int), dead_kernel,
+        dead_widened = scipy.ndimage.convolve(inside2d.astype(int), dead_kernel,
                                mode='constant', cval=0)
-        sky_widened = scipy.ndimage.convolve(dead_widened.astype(numpy.int), sky_kernel,
+        sky_widened = scipy.ndimage.convolve(dead_widened.astype(int), sky_kernel,
                                mode='constant', cval=0)
 
         edge_only_pixels = (dead_widened > 0) & (~inside2d)
@@ -407,9 +407,9 @@ if __name__ == "__main__":
         # src_data.info()
         # convert polygon center coordinates from native pixels to Ra/Dec
         #src_data.info()
-        #print(src_data['center_x'].astype(numpy.float).to_numpy())
-        _ra,_dec = wcs.all_pix2world(src_data['center_x'].astype(numpy.float).to_numpy(),
-                                  src_data['center_y'].astype(numpy.float).to_numpy(), 1)
+        #print(src_data['center_x'].astype(float).to_numpy())
+        _ra,_dec = wcs.all_pix2world(src_data['center_x'].astype(float).to_numpy(),
+                                  src_data['center_y'].astype(float).to_numpy(), 1)
         src_data['center_ra'] = _ra
         src_data['center_dec'] = _dec
         #print(radec)
@@ -420,8 +420,8 @@ if __name__ == "__main__":
             calib_factor = calibration_factors[name]
             named_logger.info("Apply calibration factor: %g" % (calib_factor))
 
-        sky_error = (src_data['src_area'] * src_data['sky_var']).astype(numpy.float).to_numpy()
-        src_error = gain * src_data['src_flux'].astype(numpy.float).to_numpy()
+        sky_error = (src_data['src_area'] * src_data['sky_var']).astype(float).to_numpy()
+        src_error = gain * src_data['src_flux'].astype(float).to_numpy()
         flx_error = numpy.fabs(src_error) + sky_error * gain**2
         flx_error[flx_error < 0] = 1e30
         # print(type(flx_error.to_numpy()))
