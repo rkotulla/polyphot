@@ -194,16 +194,16 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
 
         if (generate_check_images):
             img = image_region.copy()
-            img[~inside2d] = numpy.NaN
+            img[~inside2d] = numpy.nan
 
             dead = image_region.copy()
-            dead[~dead_only_pixels] = numpy.NaN
+            dead[~dead_only_pixels] = numpy.nan
 
             sky = image_region.copy()
-            sky[~sky_only_pixels] = numpy.NaN
+            sky[~sky_only_pixels] = numpy.nan
 
             source_sky = image_region.copy()
-            source_sky[~sky_only_pixels & ~inside2d] = numpy.NaN
+            source_sky[~sky_only_pixels & ~inside2d] = numpy.nan
 
             check_sources.append(pyfits.ImageHDU(img))
             check_dead.append(pyfits.ImageHDU(dead))
