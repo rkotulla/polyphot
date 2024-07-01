@@ -288,9 +288,9 @@ def main():
 
     cmdline.add_argument("--distance", dest="distance", default=0, type=float,
                          help='distance to source in Mpc')
-    cmdline.add_argument("--calibrate", dest="calibrate", default=1.0, type=str, nargs="*",
+    cmdline.add_argument("--calibrate", dest="calibrate", default=None, type=str, nargs="*",
                          help='calibration factor (format: filter:factor; e.g.: ha:1.e5e-9)')
-    cmdline.add_argument("--gain", dest="gain", default=1.0, type=str, nargs="*",
+    cmdline.add_argument("--gain", dest="gain", default=None, type=str, nargs="*",
                          help='gain (format: filter:gain; e.g.: ha:1.e5e-9; alternative: filter:!header_key)')
 
     cmdline.add_argument("--distance_to_center", dest="center_coord", type=str, default=None,
@@ -309,29 +309,43 @@ def main():
     logger = logging.getLogger("PolyFlux")
     logger.info("Sky parameters: %f // %f" % (args.deadspace, args.skywidth))
 
+    # find all filter names
+    filter_names = []
+    for image_fn in args.files:
+        name, _ = os.path.splitext(image_fn)
+        if (image_fn.find(":") > 0):
+            items = image_fn.split(":")
+            if (len(items) == 2):
+                image_fn = items[0]
+                name = items[1]
+                filter_names.append(name)
+    logger.info("Using these filters: %s" % ", ".join(filter_names))
+
     # parse the calibration constants
-    calibration_factors = {}
+    calibration_factors = {name:1. for name in filter_names}
     print(args.calibrate)
-    for calib in args.calibrate:  # .split(","):
-        items = calib.split(":")
-        if (len(items) == 2):
-            filtername = items[0]
-            factor = float(items[1])
-            calibration_factors[filtername] = factor
+    if (args.calibrate is not None):
+        for calib in args.calibrate:  # .split(","):
+            items = calib.split(":")
+            if (len(items) == 2):
+                filtername = items[0]
+                factor = float(items[1])
+                calibration_factors[filtername] = factor
 
     # parse the gain values
-    gain_values = {}
+    gain_values = {name:(1.,None) for name in filter_names}
     print(args.gain)
-    for calib in args.gain:  # .split(","):
-        items = calib.split(":")
-        if (len(items) == 2):
-            filtername = items[0]
-            value, key = None, None
-            try:
-                value = float(items[1])
-            except:
-                key = items[1]
-            gain_values[filtername] = (value, key)
+    if (args.gain is not None):
+        for calib in args.gain:  # .split(","):
+            items = calib.split(":")
+            if (len(items) == 2):
+                filtername = items[0]
+                value, key = None, None
+                try:
+                    value = float(items[1])
+                except:
+                    key = items[1]
+                gain_values[filtername] = (value, key)
 
     distance_cm = 1.0
     if (args.distance > 0):
