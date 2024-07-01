@@ -222,6 +222,8 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
 
 def read_polygons_from_ds9_region_file(fn):
 
+    logger = logging.getLogger("ReadPolyFromDS9RegionFile")
+
     #
     # Now read the region file
     #
