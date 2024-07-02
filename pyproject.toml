@@ -44,27 +44,35 @@ where = ['src']
 
 [tool.setuptools.package-data]
 
+
+
+
+
 [tool.poetry]
 name='polyphot'
-version = "0.1.1"
+version = "0.1.5"
 description = "Extract photometry from arbitrarily-shaped polygons"
 readme = "README.md"
-license = { file="LICENSE" }
-authors = [
-  { name="Ralf Kotulla", email="ralf.kotulla@gmail.com" },
-]
+license = "BSD-3-Clause"
+authors = [ "Ralf Kotulla <ralf.kotulla@gmail.com>" ]
+
 #license = { file="LICENSE" }
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+packages = [
+    { include = "polyphot", from ='src' }
+]
 
+[tool.poetry.scripts]
+polyphot = "polyphot.polyphot:main"
 
 [tool.poetry-dynamic-versioning]
 enable = true
 vcs = "git"
-#style = "semver"
-style = 'pep440'
+style = "semver"
+#style = 'pep440'
 
 
