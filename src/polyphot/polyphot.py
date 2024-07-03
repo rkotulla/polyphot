@@ -270,6 +270,41 @@ def read_polygons_from_ds9_region_file(fn):
     return src_polygons
 
 
+def parse_configuration(opt, defaults):
+
+    config = {**defaults}
+
+    # parse the zeropoint values
+    if (opt is not None):
+        for calib in opt:  # .split(","):
+            items = calib.split(":")
+            if (len(items) == 2):
+                filtername = items[0]
+                value, key = None, None
+                try:
+                    value = float(items[1])
+                except:
+                    key = items[1]
+                config[filtername] = (value, key)
+    return config
+
+def lookup_value(config, filtername, image_hdr=None, fallback=0):
+
+    value = fallback
+    if (filtername in config):
+        (_value, _key) = config[filtername]
+        if (_key is not None and image_hdr is not None):
+            try:
+                value = image_hdr[_key]
+                logger.info("Using value = %.3f from header" % (value))
+            except:
+                value = fallback
+                logger.info("Using fall-back value = %.3f" % (gain))
+        else:
+            value = _value
+
+    return value
+
 
 def main():
 
