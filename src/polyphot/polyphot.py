@@ -332,6 +332,8 @@ def main():
                          help='calibration factor (format: filter:factor; e.g.: ha:1.e5e-9)')
     cmdline.add_argument("--gain", dest="gain", default=None, type=str, nargs="*",
                          help='gain (format: filter:gain; e.g.: ha:1.e5e-9; alternative: filter:!header_key)')
+    cmdline.add_argument("--zeropoint", dest="zeropoint", default=None, type=str, nargs="*",
+                         help='zeropoint (format: filter:ZP; e.g.: ha:26.34; alternative: filter:!header_key)')
 
     cmdline.add_argument("--distance_to_center", dest="center_coord", type=str, default=None,
                          help="if provided, calculate distance between source and center (format: HMS+dms, eg 14:23:45+23:45:56)")
@@ -362,30 +364,38 @@ def main():
     logger.info("Using these filters: %s" % ", ".join(filter_names))
 
     # parse the calibration constants
-    calibration_factors = {name:1. for name in filter_names}
-    print(args.calibrate)
-    if (args.calibrate is not None):
-        for calib in args.calibrate:  # .split(","):
-            items = calib.split(":")
-            if (len(items) == 2):
-                filtername = items[0]
-                factor = float(items[1])
-                calibration_factors[filtername] = factor
+    calibration_factors = parse_configuration(
+        args.calibrate, defaults={name:1. for name in filter_names})
+    print("CALIBRATE", args.calibrate, calibration_factors)
+    # if (args.calibrate is not None):
+    #     for calib in args.calibrate:  # .split(","):
+    #         items = calib.split(":")
+    #         if (len(items) == 2):
+    #             filtername = items[0]
+    #             factor = float(items[1])
+    #             calibration_factors[filtername] = factor
 
     # parse the gain values
-    gain_values = {name:(1.,None) for name in filter_names}
-    print(args.gain)
-    if (args.gain is not None):
-        for calib in args.gain:  # .split(","):
-            items = calib.split(":")
-            if (len(items) == 2):
-                filtername = items[0]
-                value, key = None, None
-                try:
-                    value = float(items[1])
-                except:
-                    key = items[1]
-                gain_values[filtername] = (value, key)
+    gain_values = parse_configuration(
+        args.gain, defaults={name:(1.,None) for name in filter_names})
+    print("GAIN:", args.gain, gain_values)
+    # if (args.gain is not None):
+    #     for calib in args.gain:  # .split(","):
+    #         items = calib.split(":")
+    #         if (len(items) == 2):
+    #             filtername = items[0]
+    #             value, key = None, None
+    #             try:
+    #                 value = float(items[1])
+    #             except:
+    #                 key = items[1]
+    #             gain_values[filtername] = (value, key)
+
+    # print(args.zeropoint)
+    zeropoint_values = parse_configuration(
+        args.zeropoint,
+        defaults={name: (0., None) for name in filter_names})
+    print("ZEROPOINT:", args.zeropoint, zeropoint_values)
 
     distance_cm = 1.0
     if (args.distance > 0):
@@ -424,19 +434,24 @@ def main():
         image_data = image_hdu[0].data
         wcs = astropy.wcs.WCS(image_hdu[0].header)
 
-        if (name not in gain_values):
-            gain = 1.
-        else:
-            (gain_value, gain_key) = gain_values[name]
-            if (gain_key is not None):
-                try:
-                    gain = image_hdu[0].header['GAIN']
-                    logger.info("Using GAIN = %.3f from header" % (gain))
-                except:
-                    gain = 1000.
-                    logger.info("Using fall-back GAIN = %.3f" % (gain))
-            else:
-                gain = gain_value
+        # if (name not in gain_values):
+        #     gain = 1.
+        # else:
+        #     (gain_value, gain_key) = gain_values[name]
+        #     if (gain_key is not None):
+        #         try:
+        #             gain = image_hdu[0].header['GAIN']
+        #             logger.info("Using GAIN = %.3f from header" % (gain))
+        #         except:
+        #             gain = 1000.
+        #             logger.info("Using fall-back GAIN = %.3f" % (gain))
+        #     else:
+        #         gain = gain_value
+
+        gain = lookup_value(gain_values, filtername=name, image_hdr=image_hdu[0].header, fallback=1)
+        logger.info("Using gain value %s" % (gain))
+        zeropoint = lookup_value(zeropoint_values, filtername=name, image_hdr=image_hdu[0].header, fallback=0)
+        logger.info("Using zeropoint: %.4f" % (zeropoint))
 
         # print(wcs)
 
