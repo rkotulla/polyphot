@@ -148,28 +148,33 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
             center_x = numpy.mean( poly_ix[inside2d] )
             center_y = numpy.mean( poly_iy[inside2d] )
 
-            edge_mean = numpy.nanmean( image_region[edge_only_pixels] )
-            edge_median = numpy.nanmedian( image_region[edge_only_pixels] )
-            edge_area = numpy.sum( edge_only_pixels )
+            edge_mean, edge_median = numpy.nan, numpy.nan
+            edge_area = numpy.sum(edge_only_pixels)
+            if (edge_area > 0):
+                edge_mean = numpy.nanmean( image_region[edge_only_pixels] )
+                edge_median = numpy.nanmedian( image_region[edge_only_pixels] )
 
-            edge_mean = numpy.nanmean( image_region[sky_only_pixels] )
-            edge_median = numpy.nanmedian( image_region[sky_only_pixels] )
-            edge_area = numpy.sum( sky_only_pixels )
-
-            sky_pixels = image_region[sky_only_pixels]
-            good = numpy.isfinite(sky_pixels)
-            for iteration in range(3):
-                _stats = numpy.nanpercentile(sky_pixels[good], [16,50,84])
-                _median = _stats[1]
-                _sigma = 0.5*(_stats[2]-_stats[0])
-                outlier = (sky_pixels > (_median + 3*_sigma)) | (sky_pixels < (_median - 3*_sigma))
-                good[outlier] = False
-
-            sky_mean = numpy.nanmean(sky_pixels[good])
-            sky_median = numpy.nanmedian(sky_pixels[good])
-            sky_std = numpy.nanstd(sky_pixels[good])
-            sky_var = numpy.nanvar(sky_pixels[good])
             sky_area = numpy.sum(sky_only_pixels)
+            #edge_mean = numpy.nanmean( image_region[sky_only_pixels] )
+            #edge_median = numpy.nanmedian( image_region[sky_only_pixels] )
+            #edge_area = numpy.sum( sky_only_pixels )
+            if (sky_area <= 0):
+                sky_mean, sky_median, sky_std, sky_var = numpy.nan, numpy.nan, numpy.nan, numpy.nan
+            else:
+                sky_pixels = image_region[sky_only_pixels]
+                good = numpy.isfinite(sky_pixels)
+                for iteration in range(3):
+                    _stats = numpy.nanpercentile(sky_pixels[good], [16,50,84])
+                    _median = _stats[1]
+                    _sigma = 0.5*(_stats[2]-_stats[0])
+                    outlier = (sky_pixels > (_median + 3*_sigma)) | (sky_pixels < (_median - 3*_sigma))
+                    good[outlier] = False
+
+                sky_mean = numpy.nanmean(sky_pixels[good])
+                sky_median = numpy.nanmedian(sky_pixels[good])
+                sky_std = numpy.nanstd(sky_pixels[good])
+                sky_var = numpy.nanvar(sky_pixels[good])
+                sky_area = numpy.sum(sky_only_pixels)
 
             polygon_data.append([n_pixels, total_flux, center_x, center_y, edge_mean, edge_median, edge_area])
 
