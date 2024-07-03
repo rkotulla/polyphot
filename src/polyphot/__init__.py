@@ -1,2 +1,2 @@
-from .polyphot import measure_polygons
+from .polyphot import measure_polygons, main
 
