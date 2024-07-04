@@ -306,6 +306,12 @@ def lookup_value(config, filtername, image_hdr=None, fallback=0):
 
     return value
 
+def safe_mag(flux):
+    _ret = numpy.full_like(flux, numpy.nan)
+    pos = (flux > 0)
+    if (numpy.sum(pos) > 0):
+        _ret[pos] = -2.5 * numpy.log10(flux[pos])
+    return _ret
 
 def main():
 
