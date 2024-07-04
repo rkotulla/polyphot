@@ -77,6 +77,7 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
                  'src_flux', 'src_area',
                  'sky_median', 'sky_mean', 'sky_std', 'sky_area', 'sky_var',
                  ],
+        dtype=float,
     )
     for ipoly, polygon in enumerate(polygon_list):
 
@@ -134,11 +135,11 @@ def measure_polygons(polygon_list, image, wcs, edgewidth=1, deadspace=0, skysize
         n_pixels = numpy.sum(inside2)
 
         # set some default values in case things go wrong down the line
-        total_flux = -1
-        center_x = -1
-        center_y = -1
-        edge_mean = edge_median = edge_area = -1
-        sky_mean = sky_median = sky_area = sky_std = sky_var = -1
+        total_flux = -1.
+        center_x = -1.
+        center_y = -1.
+        edge_mean = edge_median = edge_area = -1.
+        sky_mean = sky_median = sky_area = sky_std = sky_var = -1.
 
 
         if (n_pixels >= 1):
