@@ -436,25 +436,10 @@ def main():
         #
         named_logger.debug("Reading %s" % (image_fn))
         image_hdu = pyfits.open(image_fn)
-        # image_hdu.info()
-
         image_data = image_hdu[0].data
         wcs = astropy.wcs.WCS(image_hdu[0].header)
 
-        # if (name not in gain_values):
-        #     gain = 1.
-        # else:
-        #     (gain_value, gain_key) = gain_values[name]
-        #     if (gain_key is not None):
-        #         try:
-        #             gain = image_hdu[0].header['GAIN']
-        #             logger.info("Using GAIN = %.3f from header" % (gain))
-        #         except:
-        #             gain = 1000.
-        #             logger.info("Using fall-back GAIN = %.3f" % (gain))
-        #     else:
-        #         gain = gain_value
-
+        # Pick the user-supplied values for this filter
         gain = lookup_value(gain_values, filtername=name, image_hdr=image_hdu[0].header, fallback=1)
         logger.info("Using gain value %s" % (gain))
         zeropoint = lookup_value(zeropoint_values, filtername=name, image_hdr=image_hdu[0].header, fallback=0)
@@ -478,16 +463,14 @@ def main():
 
         (check_sources, check_dead, check_sky, check_source_sky) = check_hdulists
 
+        # Write check-images if requested
         if (args.checkimages):
             pyfits.HDUList(check_sources).writeto("check_sources.fits", overwrite=True)
             pyfits.HDUList(check_dead).writeto("check_dead.fits", overwrite=True)
             pyfits.HDUList(check_sky).writeto("check_sky.fits", overwrite=True)
             pyfits.HDUList(check_source_sky).writeto("check_source_sky.fits", overwrite=True)
 
-        # src_data.info()
         # convert polygon center coordinates from native pixels to Ra/Dec
-        # src_data.info()
-        # print(src_data['center_x'].astype(float).to_numpy())
         _ra, _dec = wcs.all_pix2world(src_data['center_x'].astype(float).to_numpy(),
                                       src_data['center_y'].astype(float).to_numpy(), 1)
         src_data['center_ra'] = _ra
@@ -504,9 +487,9 @@ def main():
         src_error = gain * src_data['src_flux'].astype(float).to_numpy()
         flx_error = numpy.fabs(src_error) + sky_error * gain ** 2
         flx_error[flx_error < 0] = 1e30
-        # print(type(flx_error.to_numpy()))
         src_data['src_flux_error'] = numpy.power(flx_error, 0.5) / gain
 
+        # Apply user-specified calibrations
         src_data['calib_flux'] = src_data['flux_bgsub'] * calib_factor
         src_data['calib_flux_error'] = src_data['src_flux_error'] * calib_factor
 
@@ -518,20 +501,27 @@ def main():
         src_data['calib_luminosity'] = src_data['calib_flux'] * 4 * numpy.pi * distance_cm ** 2
         src_data['calib_luminosity_error'] = src_data['calib_flux_error'] * 4 * numpy.pi * distance_cm ** 2
 
+        # Use the user-supplied canter coordinates to compute a distance between this center and each source polygon
         if (center_pos is not None):
             src_skycoords = astropy.coordinates.SkyCoord(src_data['center_ra'], src_data['center_dec'], unit=u.deg)
             distances = src_skycoords.separation(center_pos)
             src_data['center_distance_deg'] = distances.deg
-            # print(distances)
 
+            # If we have a distance, also convert angular distance to physical distance
             if (args.distance is not None):
                 src_data['center_distance_kpc'] = numpy.arctan(distances.rad) * args.distance * 1000.
 
+        # compute magnitudes from fluxes
+        src_data['src_mag'] = safe_mag(src_data['src_flux'])
+        src_data['src_mag_bgsub'] = safe_mag(src_data['flux_bgsub'])
+        src_data['src_mag_bgsub_err'] = safe_mag(src_data['flux_bgsub']) - safe_mag(src_data['flux_bgsub'] + src_data['src_flux_error'])
+
+        # prefix each column with the current filter name
         new_column_names = ["%s_%s" % (name, col) for col in src_data.columns]
         column_translate = dict(zip(src_data.columns, new_column_names))
         src_data.rename(columns=column_translate, inplace=True)
-        # src_data.info()
 
+        # merge all catalogs together
         if (master_catalog is None):
             master_catalog = src_data
         else:
