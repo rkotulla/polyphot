@@ -59,7 +59,7 @@ authors = [ "Ralf Kotulla <ralf.kotulla@gmail.com>" ]
 #license = { file="LICENSE" }
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: The 3-Clause BSD License (BSD-3-Clause)",
+    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
 ]
 packages = [
