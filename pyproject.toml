@@ -17,7 +17,7 @@ license = { file="LICENSE" }
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: The 3-Clause BSD License (BSD-3-Clause)",
+    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
 ]
 
