@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "polyphot"
-version = "0.1.1"
+version = "0.1.9"
 
 authors = [
   { name="Ralf Kotulla", email="ralf.kotulla@gmail.com" },
