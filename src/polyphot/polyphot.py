@@ -291,6 +291,8 @@ def parse_configuration(opt, defaults):
 
 def lookup_value(config, filtername, image_hdr=None, fallback=0):
 
+    logger = logging.getLogger("LookupValue")
+
     value = fallback
     if (filtername in config):
         (_value, _key) = config[filtername]
